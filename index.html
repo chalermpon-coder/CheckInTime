@@ -52,7 +52,7 @@
             </div>
 
             <!-- ปุ่มลงเวลา -->
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-2 gap-4 mb-6">
                 <button onclick="submitTime('IN')" id="btn-in" disabled
                     class="flex flex-col items-center justify-center py-5 bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-300 text-white rounded-2xl transition-all shadow-lg active:transform active:scale-95">
                     <i class="fas fa-sign-in-alt text-2xl mb-1"></i>
@@ -64,6 +64,12 @@
                     <span class="font-bold">ลงเวลากลับ</span>
                 </button>
             </div>
+
+            <!-- ปุ่มสถิติประจำวัน (ลิงก์ภายนอก) -->
+            <a id="stats-link" href="#"  class="w-full py-4 bg-blue-50 text-blue-700 rounded-2xl font-medium hover:bg-blue-100 transition-colors flex items-center justify-center gap-2 border border-blue-100">
+                <i class="fas fa-chart-bar"></i>
+                ดูสถิติประจำวัน
+            </a>
         </div>
 
         <div class="px-8 pb-6 text-center">
@@ -73,7 +79,7 @@
 
     <!-- Modal แจ้งเตือนสถานะ -->
     <div id="modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
-        <div class="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl">
+        <div class="bg-white rounded-3xl p-8 max-sm w-full text-center shadow-2xl">
             <div id="modal-icon" class="text-6xl mb-4"></div>
             <h3 id="modal-title" class="text-2xl font-bold mb-2 text-gray-800"></h3>
             <p id="modal-message" class="text-gray-600 mb-8"></p>
@@ -83,13 +89,18 @@
 
     <script>
         // --- ส่วนตั้งค่าที่ต้องอัปเดต ---
-        const SCHOOL_LAT = 15.316909; // พิกัดโรงเรียนตาลสุมพัฒนา
+        const SCHOOL_LAT = 15.316909; 
         const SCHOOL_LNG = 105.157185;
-        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw9kBOrTGo0Xn1WTV6vo--QA0fdMoca03_58USeQ6TQ5wUc2dN3AjCiJH9FRaPfCsmK/exec'; // *** วาง Web App URL ที่ได้จาก Google Apps Script ที่นี่ ***
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw9kBOrTGo0Xn1WTV6vo--QA0fdMoca03_58USeQ6TQ5wUc2dN3AjCiJH9FRaPfCsmK/exec'; 
         
+        // ใส่ลิงก์สถิติของคุณที่นี่
+        const EXTERNAL_STATS_URL = 'https://chalermpon-coder.github.io/CheckInTime/stat.html'; 
+
         let userCoords = null;
 
-        // อัปเดตนาฬิกา
+        // อัปเดตลิงก์สถิติ
+        document.getElementById('stats-link').href = EXTERNAL_STATS_URL;
+
         function updateClock() {
             const now = new Date();
             document.getElementById('current-time').textContent = now.toLocaleTimeString('th-TH', { hour12: false });
@@ -100,19 +111,15 @@
         setInterval(updateClock, 1000);
         updateClock();
 
-        // ฟังก์ชันดึงรายชื่อครูจาก Google Sheet
         async function fetchTeachers() {
             const select = document.getElementById('employee-name');
             if (!SCRIPT_URL || SCRIPT_URL.includes('YOUR_GOOGLE')) {
                 select.innerHTML = '<option value="">กรุณาตั้งค่า SCRIPT_URL</option>';
                 return;
             }
-
             try {
-                // เรียกผ่าน doGet ใน Apps Script
                 const response = await fetch(SCRIPT_URL);
                 const names = await response.json();
-                
                 if (names.length > 0) {
                     select.innerHTML = '<option value="">-- เลือกชื่อของคุณ --</option>';
                     names.forEach(name => {
@@ -130,34 +137,18 @@
             }
         }
 
-        // เริ่มระบบ GPS
         function initLocation() {
             if (!navigator.geolocation) {
                 updateStatus('เบราว์เซอร์ไม่รองรับระบบ GPS', 'error');
                 return;
             }
-
-            const options = {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 0
-            };
-
+            const options = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
             navigator.geolocation.watchPosition(
                 (pos) => {
-                    userCoords = {
-                        lat: pos.coords.latitude,
-                        lng: pos.coords.longitude
-                    };
-                    
-                    const dist = calculateDistance(
-                        userCoords.lat, userCoords.lng,
-                        SCHOOL_LAT, SCHOOL_LNG
-                    );
-                    
+                    userCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                    const dist = calculateDistance(userCoords.lat, userCoords.lng, SCHOOL_LAT, SCHOOL_LNG);
                     document.getElementById('display-coords').textContent = `${userCoords.lat.toFixed(6)}, ${userCoords.lng.toFixed(6)}`;
                     document.getElementById('display-distance').textContent = Math.round(dist).toLocaleString();
-                    
                     updateStatus('ระบุตำแหน่งพิกัดแล้ว พร้อมสำหรับการลงเวลา', 'success');
                     document.getElementById('btn-in').disabled = false;
                     document.getElementById('btn-out').disabled = false;
@@ -171,9 +162,8 @@
             );
         }
 
-        // คำนวณระยะห่างระหว่าง 2 จุด (Haversine Formula)
         function calculateDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371e3; // รัศมีโลกเป็นเมตร
+            const R = 6371e3; 
             const dLat = (lat2 - lat1) * Math.PI / 180;
             const dLon = (lon2 - lon1) * Math.PI / 180;
             const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
@@ -187,7 +177,6 @@
             const statusDiv = document.getElementById('location-status');
             const statusText = document.getElementById('status-text');
             statusText.textContent = text;
-            
             if (type === 'error') {
                 statusDiv.className = 'mb-6 p-4 rounded-xl bg-red-50 text-red-700 text-sm flex items-start border border-red-100';
             } else {
@@ -201,24 +190,13 @@
                 showModal('แจ้งเตือน', 'กรุณาเลือกชื่อของคุณก่อนลงเวลา', '⚠️');
                 return;
             }
-
             const distVal = document.getElementById('display-distance').textContent;
             const btn = type === 'IN' ? document.getElementById('btn-in') : document.getElementById('btn-out');
             const originalContent = btn.innerHTML;
-            
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-circle-notch fa-spin text-2xl"></i>';
-
-            const payload = {
-                name: name,
-                type: type,
-                distance: distVal.replace(/,/g, ''),
-                lat: userCoords.lat,
-                lng: userCoords.lng
-            };
-
+            const payload = { name: name, type: type, distance: distVal.replace(/,/g, ''), lat: userCoords.lat, lng: userCoords.lng };
             try {
-                // ส่งข้อมูลไปยัง doPost ใน Apps Script
                 await fetch(SCRIPT_URL, {
                     method: 'POST',
                     mode: 'no-cors',
@@ -226,7 +204,6 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
-
                 showModal('สำเร็จ', `ลงเวลา${type === 'IN' ? 'มา' : 'กลับ'}สำเร็จ เรียบร้อยแล้ว`, '✅');
             } catch (error) {
                 showModal('ล้มเหลว', 'เกิดข้อผิดพลาดในการส่งข้อมูล กรุณาลองใหม่', '❌');
@@ -247,7 +224,6 @@
             document.getElementById('modal').classList.add('hidden');
         }
 
-        // เมื่อโหลดหน้าเว็บ
         window.onload = () => {
             initLocation();
             fetchTeachers();
