@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>ระบบตรวจสอบการเข้างานครู</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
+        
+        :root {
+            --safe-area-top: env(safe-area-inset-top);
+            --safe-area-bottom: env(safe-area-inset-bottom);
+        }
+
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background-color: #f8fafc;
+            -webkit-tap-highlight-color: transparent;
+            padding-bottom: var(--safe-area-bottom);
+        }
+
+        /* ป้องกันการซูมอัตโนมัติบน iOS เมื่อ focus input */
+        input, select, textarea {
+            font-size: 16px !important;
+        }
+
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #10b981;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* ปรับสไตล์การ์ดให้น่ากดมากขึ้นบนมือถือ */
+        .teacher-card:active {
+            transform: scale(0.98);
+            background-color: #f1f5f9;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <!-- Header & Navigation -->
+    <div class="bg-white sticky top-0 z-20 border-b border-gray-200 shadow-sm pt-[--safe-area-top]">
+        <header class="bg-green-600 text-white px-4 py-4 md:py-6">
+            <div class="container mx-auto flex justify-between items-center">
+                <div>
+                    <h1 class="text-xl font-bold leading-tight">ระบบบันทึกเวลาครู</h1>
+                    <div class="flex items-center text-[12px] opacity-90 mt-1">
+                        <i class="far fa-calendar-alt mr-2"></i>
+                        <input type="date" id="datePicker" class="bg-transparent border-none focus:ring-0 text-white cursor-pointer p-0 font-medium">
+                    </div>
+                </div>
+                <button onclick="fetchData()" class="bg-white/20 hover:bg-white/30 w-11 h-11 flex items-center justify-center rounded-2xl transition-all active:scale-90">
+                    <i class="fas fa-sync-alt text-lg"></i>
+                </button>
+            </div>
+        </header>
+        
+        <div class="p-4 container mx-auto">
+            <div class="flex gap-2 mb-4">
+                <div class="relative flex-1">
+                    <input type="text" id="searchInput" placeholder="ค้นชื่อครูหรือตำแหน่ง..." 
+                        class="w-full py-3 pl-11 pr-4 rounded-2xl bg-gray-100 border-none focus:ring-2 focus:ring-green-500 text-sm appearance-none">
+                    <i class="fas fa-search absolute left-4 top-4 text-gray-400 text-sm"></i>
+                </div>
+            </div>
+            
+            <!-- Quick Filter Tabs -->
+            <div class="flex space-x-2 overflow-x-auto hide-scrollbar text-[13px] pb-1">
+                <button onclick="filterType('all')" id="btn-all" class="px-6 py-2.5 rounded-full bg-green-600 text-white shadow-sm border border-green-600 whitespace-nowrap font-semibold transition-all">ทั้งหมด</button>
+                <button onclick="filterType('present')" id="btn-present" class="px-6 py-2.5 rounded-full bg-white text-gray-600 border border-gray-200 whitespace-nowrap font-semibold transition-all">มาปฏิบัติงาน</button>
+                <button onclick="filterType('absent')" id="btn-absent" class="px-6 py-2.5 rounded-full bg-white text-gray-600 border border-gray-200 whitespace-nowrap font-semibold transition-all">ยังไม่มา</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Dashboard -->
+    <div class="px-4 py-4 container mx-auto grid grid-cols-3 gap-3">
+        <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 text-center">
+            <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">ทั้งหมด</p>
+            <p id="totalCount" class="text-2xl font-bold text-gray-700">0</p>
+        </div>
+        <div class="bg-green-50 p-4 rounded-2xl shadow-sm border border-green-100 text-center">
+            <p class="text-[10px] text-green-500 font-bold uppercase tracking-widest mb-1">มาแล้ว</p>
+            <p id="presentCount" class="text-2xl font-bold text-green-600">0</p>
+        </div>
+        <div class="bg-red-50 p-4 rounded-2xl shadow-sm border border-red-100 text-center">
+            <p class="text-[10px] text-red-400 font-bold uppercase tracking-widest mb-1">ยังไม่มา</p>
+            <p id="absentCount" class="text-2xl font-bold text-red-600">0</p>
+        </div>
+    </div>
+
+    <!-- States Container -->
+    <div id="loading" class="flex flex-col items-center justify-center py-20 hidden">
+        <div class="loader mb-4"></div>
+        <p class="text-sm text-gray-400">กำลังเชื่อมต่อข้อมูล...</p>
+    </div>
+
+    <div id="emptyState" class="flex flex-col items-center justify-center py-24 hidden">
+        <div class="bg-gray-100 w-24 h-24 rounded-full flex items-center justify-center mb-5">
+            <i class="fas fa-user-slash text-gray-300 text-4xl"></i>
+        </div>
+        <p class="text-gray-500 font-medium">ไม่พบข้อมูลในระบบ</p>
+        <p class="text-gray-400 text-xs mt-1">ลองเปลี่ยนวันที่หรือคำค้นหา</p>
+    </div>
+
+    <!-- Teacher List -->
+    <main class="container mx-auto px-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="teacherList">
+        <!-- Rows will be injected here -->
+    </main>
+
+    <div class="h-10"></div> <!-- Bottom Spacer for Mobile -->
+
+    <script>
+        // *** วาง Web App URL ที่ได้จาก Google Apps Script ที่นี่ ***
+        const GOOGLE_SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbz_Vow99Gl9MwL2S99084NgfU6LoGaPqAJbInc9P-vfzZPwNYAGcKUvrlKg4len0CBkrg/exec'; 
+        
+        let currentFilter = 'all';
+        let teachersData = [];
+
+        function init() {
+            const today = new Date();
+            const dateInput = document.getElementById('datePicker');
+            // ปรับเวลาให้ตรงกับ Local Timezone ก่อนแปลงเป็น ISO
+            const offset = today.getTimezoneOffset() * 60000;
+            const localISODate = (new Date(today - offset)).toISOString().split('T')[0];
+            dateInput.value = localISODate;
+            
+            fetchData();
+        }
+
+        async function fetchData() {
+            const selectedDate = document.getElementById('datePicker').value;
+            const loading = document.getElementById('loading');
+            const list = document.getElementById('teacherList');
+            const empty = document.getElementById('emptyState');
+
+            if (!GOOGLE_SHEET_API_URL || GOOGLE_SHEET_API_URL.includes('macros/s/')) {
+                // ข้ามถ้ายังไม่ได้ใส่ URL จริง
+            }
+
+            loading.classList.remove('hidden');
+            list.classList.add('hidden');
+            empty.classList.add('hidden');
+
+            try {
+                const response = await fetch(`${GOOGLE_SHEET_API_URL}?date=${selectedDate}`);
+                const result = await response.json();
+                teachersData = result.data;
+                render();
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                list.innerHTML = `
+                    <div class="col-span-full p-10 text-center bg-white rounded-3xl border border-dashed border-gray-200">
+                        <i class="fas fa-wifi text-gray-200 text-4xl mb-4"></i>
+                        <p class="text-gray-500 font-medium">ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้</p>
+                        <button onclick="fetchData()" class="mt-4 px-6 py-2 bg-green-600 text-white rounded-full text-sm font-bold">ลองอีกครั้ง</button>
+                    </div>`;
+            } finally {
+                loading.classList.add('hidden');
+                list.classList.remove('hidden');
+            }
+        }
+
+        function render() {
+            const term = document.getElementById('searchInput').value.toLowerCase();
+            const listContainer = document.getElementById('teacherList');
+            
+            let filtered = teachersData.filter(t => 
+                t.name.toLowerCase().includes(term) || 
+                (t.position && t.position.toLowerCase().includes(term))
+            );
+
+            if (currentFilter === 'present') filtered = filtered.filter(t => t.isPresent);
+            if (currentFilter === 'absent') filtered = filtered.filter(t => !t.isPresent);
+
+            listContainer.innerHTML = '';
+            
+            if (filtered.length === 0) {
+                document.getElementById('emptyState').classList.remove('hidden');
+                updateStats();
+                return;
+            } else {
+                document.getElementById('emptyState').classList.add('hidden');
+            }
+
+            filtered.forEach(t => {
+                const card = document.createElement('div');
+                card.className = `teacher-card flex items-center justify-between p-5 bg-white border border-gray-100 rounded-3xl shadow-sm transition-all duration-200 hover:shadow-md cursor-pointer`;
+                
+                card.innerHTML = `
+                    <div class="flex items-center space-x-4 overflow-hidden">
+                        <div class="w-12 h-12 rounded-2xl ${t.isPresent ? 'bg-green-100 text-green-600' : 'bg-gray-50 text-gray-300'} flex items-center justify-center font-bold text-sm flex-shrink-0 border border-gray-50 transition-all">
+                            ${t.id}
+                        </div>
+                        <div class="truncate">
+                            <h3 class="text-[15px] font-bold text-gray-800 truncate">${t.name}</h3>
+                            <p class="text-[12px] text-gray-400 truncate mt-0.5">${t.position || 'บุคลากร'}</p>
+                            <div class="flex items-center text-[10px] mt-2">
+                                <span class="${t.isPresent ? 'text-green-600 bg-green-50' : 'text-gray-400 bg-gray-50'} px-2.5 py-1 rounded-lg flex items-center font-bold">
+                                    <i class="fas fa-circle text-[5px] mr-2"></i>
+                                    ${t.isPresent ? 'มาปฏิบัติงาน' : 'ยังไม่เช็คชื่อ'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex space-x-4 ml-3">
+                        <div class="text-right border-l pl-4 border-gray-100">
+                            <p class="text-[9px] text-gray-400 uppercase font-bold tracking-widest mb-1">เข้า</p>
+                            <p class="text-[15px] font-black ${t.isPresent ? 'text-gray-700' : 'text-gray-200'}">${t.arrival}</p>
+                        </div>
+                        <div class="text-right border-l pl-4 border-gray-100">
+                            <p class="text-[9px] text-gray-400 uppercase font-bold tracking-widest mb-1">กลับ</p>
+                            <p class="text-[15px] font-black ${t.return !== '-' ? 'text-blue-500' : 'text-gray-200'}">${t.return}</p>
+                        </div>
+                    </div>
+                `;
+                listContainer.appendChild(card);
+            });
+
+            updateStats();
+        }
+
+        function updateStats() {
+            document.getElementById('totalCount').innerText = teachersData.length;
+            document.getElementById('presentCount').innerText = teachersData.filter(t => t.isPresent).length;
+            document.getElementById('absentCount').innerText = teachersData.filter(t => !t.isPresent).length;
+        }
+
+        function filterType(type) {
+            currentFilter = type;
+            ['all', 'present', 'absent'].forEach(id => {
+                const btn = document.getElementById('btn-' + id);
+                if (id === type) {
+                    btn.className = "px-6 py-2.5 rounded-full bg-green-600 text-white shadow-md border border-green-600 whitespace-nowrap font-bold transition-all scale-105 z-10";
+                } else {
+                    btn.className = "px-6 py-2.5 rounded-full bg-white text-gray-600 border border-gray-200 whitespace-nowrap font-semibold transition-all";
+                }
+            });
+            render();
+        }
+
+        document.getElementById('datePicker').addEventListener('change', fetchData);
+        document.getElementById('searchInput').addEventListener('input', render);
+
+        // รองรับการปัดหน้าจอเพื่อรีเฟรช (เบื้องต้น)
+        let touchstartY = 0;
+        window.addEventListener('touchstart', e => { touchstartY = e.touches[0].pageY; }, {passive: true});
+        window.addEventListener('touchend', e => {
+            const touchendY = e.changedTouches[0].pageY;
+            if (window.scrollY === 0 && touchendY > touchstartY + 100) {
+                fetchData();
+            }
+        }, {passive: true});
+
+        window.onload = init;
+    </script>
+</body>
+</html>
